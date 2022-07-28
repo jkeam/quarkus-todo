@@ -1,0 +1,28 @@
+version: '3.7'
+
+services:
+  db:
+    container_name: postgres
+    image: registry.redhat.io/rhel9/postgresql-13
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      PGPORT: 5432
+      POSTGRESQL_USER: root
+      POSTGRESQL_PASSWORD: root
+      POSTGRESQL_DATABASE: todo_app
+      POSTGRESQL_MAX_PREPARED_TRANSACTIONS: 100
+      POSTGRESQL_MAX_CONNECTIONS: 100
+      POSTGRESQL_ADMIN_PASSWORD: root
+      SCRIPT_DIR: /opt/sql
+    volumes:
+      - /Users/jkeam/dev/projects/quarkus/db_data:/var/lib/pgsql/data
+  adminer:
+    container_name: adminer
+    image: adminer
+    restart: always
+    ports:
+      - "8081:8080"
+    depends_on:
+      - db
