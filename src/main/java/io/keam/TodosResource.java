@@ -14,6 +14,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Generates Todos Rest Endpoints
@@ -59,7 +60,7 @@ public class TodosResource {
         if (todo == null) {
             throw new BadRequestException();
         }
-        User user = User.findByUsername(username);
+        User user = User.findByUsername(username).orElseThrow(BadRequestException::new);
         user.addTodo(todo);
         todo.persist();
         return Response.created(URI.create("/todos/" + todo.getId())).build();

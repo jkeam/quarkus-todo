@@ -35,6 +35,10 @@ public class Todo extends PanacheEntity {
     public Todo() {
     }
 
+	public Todo(String title) {
+		this.title = title;
+	}
+
 	public Long getId() {
 		return id;
 	}

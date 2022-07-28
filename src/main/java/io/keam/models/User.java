@@ -3,15 +3,15 @@ package io.keam.models;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.keam.utils.ModelUtils;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import io.quarkus.panache.common.Page;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
-import io.quarkus.panache.common.Page;
-import io.quarkus.panache.common.Sort;
 
 import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Entity
 @Table(name = "users", indexes = { @Index(name = "usernameIndex", columnList = "username", unique = true) })
@@ -36,11 +36,11 @@ public class User extends PanacheEntity {
      * @param username The username of the user
      * @return user
      */
-    public static User findByUsername(String username) {
+    public static Optional<User> findByUsername(String username) {
         if (username == null) {
-            return null;
+            return Optional.empty();
         }
-        return find("lower(username)", username.toLowerCase(Locale.US)).firstResult();
+        return Optional.ofNullable(find("lower(username)", username.toLowerCase(Locale.US)).firstResult());
     }
 
     /**
@@ -52,11 +52,12 @@ public class User extends PanacheEntity {
      * @return list of todos
      */
     public static List<Todo> findAllTodosForUsername(String username, int pageIndex, int pageSize, String sortOrder) {
-        User user = findByUsername(username);
-        if (user == null) {
+        Optional<User> userOptional = findByUsername(username);
+        if (userOptional.isEmpty()) {
             return new ArrayList<>();
         }
 
+        User user = userOptional.get();
         return Todo.find("user_id", ModelUtils.createSort(sortOrder), user.getId())
                 .page(Page.of(pageIndex, pageSize))
                 .list();
