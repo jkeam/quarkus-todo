@@ -14,7 +14,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Generates Todos Rest Endpoints
@@ -27,9 +26,6 @@ import java.util.Optional;
 public class TodosResource {
 
     private static final Logger LOG = Logger.getLogger(TodosResource.class);
-
-//    @Inject
-//    JsonWebToken jwt;
 
     @Claim(standard = Claims.upn)
     String username;
