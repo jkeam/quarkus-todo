@@ -1,7 +1,13 @@
 package io.keam;
 
 import io.keam.models.Todo;
+import io.keam.models.User;
+import org.eclipse.microprofile.jwt.Claim;
+import org.eclipse.microprofile.jwt.Claims;
+import org.jboss.logging.Logger;
 
+import javax.annotation.security.RolesAllowed;
+import javax.enterprise.context.RequestScoped;
 import javax.transaction.Transactional;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
@@ -13,18 +19,38 @@ import java.util.List;
  * Generates Todos Rest Endpoints
  */
 @Path("/todos")
+@RolesAllowed({ "User" })
+@RequestScoped
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class TodosResource {
+
+    private static final Logger LOG = Logger.getLogger(TodosResource.class);
+
+//    @Inject
+//    JsonWebToken jwt;
+
+    @Claim(standard = Claims.upn)
+    String username;
+
     @GET
-    public List<Todo> list() {
-        return Todo.listAll();
+    public List<Todo> list(@QueryParam("sort") @DefaultValue("desc") String sortOrder,
+                           @QueryParam("page") @DefaultValue("0") int pageIndex,
+                           @QueryParam("size") @DefaultValue("20") int pageSize) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debugv("Username: {0}", username);
+        }
+        return User.findAllTodosForUsername(username, pageIndex, pageSize, sortOrder);
     }
 
     @GET
     @Path("/{id}")
     public Todo get(Long id) {
-        return Todo.findById(id);
+        Todo todo = Todo.findById(id);
+        if (todo != null && todo.isOwnedByUsername(username)) {
+            return todo;
+        }
+        return null;
     }
 
     @POST
@@ -33,8 +59,10 @@ public class TodosResource {
         if (todo == null) {
             throw new BadRequestException();
         }
+        User user = User.findByUsername(username);
+        user.addTodo(todo);
         todo.persist();
-        return Response.created(URI.create("/persons/" + todo.getId())).build();
+        return Response.created(URI.create("/todos/" + todo.getId())).build();
     }
 
     @PUT
@@ -42,7 +70,7 @@ public class TodosResource {
     @Transactional
     public Todo update(Long id, Todo todo) {
         Todo entity = Todo.findById(id);
-        if(entity == null) {
+        if (entity == null || !entity.isOwnedByUsername(username)) {
             throw new NotFoundException();
         }
 
@@ -56,10 +84,9 @@ public class TodosResource {
     @Transactional
     public void delete(Long id) {
         Todo entity = Todo.findById(id);
-        if(entity == null) {
+        if (entity == null || !entity.isOwnedByUsername(username)) {
             throw new NotFoundException();
         }
         entity.delete();
     }
-
 }

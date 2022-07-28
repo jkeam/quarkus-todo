@@ -37,3 +37,7 @@ nb-configuration.xml
 
 # Local environment
 .env
+
+.sdkmanrc
+**/privateKey.pem
+**/publicKey.pem
