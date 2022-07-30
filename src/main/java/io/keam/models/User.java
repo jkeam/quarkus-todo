@@ -2,8 +2,10 @@ package io.keam.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.keam.utils.ModelUtils;
-import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import io.quarkus.hibernate.reactive.panache.PanacheEntity;
+import io.quarkus.hibernate.reactive.panache.PanacheQuery;
 import io.quarkus.panache.common.Page;
+import io.smallrye.mutiny.Uni;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
@@ -36,11 +38,13 @@ public class User extends PanacheEntity {
      * @param username The username of the user
      * @return user
      */
-    public static Optional<User> findByUsername(String username) {
+    public static Uni<Optional<User>> findByUsername(String username) {
         if (username == null) {
-            return Optional.empty();
+            return Uni.createFrom().optional(Optional.empty());
+
         }
-        return Optional.ofNullable(find("lower(username)", username.toLowerCase(Locale.US)).firstResult());
+        Uni<User> userUni = find("lower(username)", username.toLowerCase(Locale.US)).firstResult();
+        return userUni.chain(user -> Uni.createFrom().item(Optional.ofNullable(user)));
     }
 
     /**
@@ -51,16 +55,15 @@ public class User extends PanacheEntity {
      * @param sortOrder The order to apply the sort
      * @return list of todos
      */
-    public static List<Todo> findAllTodosForUsername(String username, int pageIndex, int pageSize, String sortOrder) {
-        Optional<User> userOptional = findByUsername(username);
-        if (userOptional.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        User user = userOptional.get();
-        return Todo.find("user_id", ModelUtils.createSort(sortOrder), user.getId())
-                .page(Page.of(pageIndex, pageSize))
-                .list();
+    public static Uni<List<Todo>> findAllTodosForUsername(String username, int pageIndex, int pageSize, String sortOrder) {
+        return findByUsername(username).chain(userOptional -> {
+            if (userOptional.isEmpty()) {
+                return Uni.createFrom().item(new ArrayList<Todo>());
+            }
+            User user = userOptional.get();
+            PanacheQuery<Todo> query = Todo.find("user_id", ModelUtils.createSort(sortOrder), user.getId());
+            return query.page(Page.of(pageIndex, pageSize)).list();
+        });
     }
 
     public User() {

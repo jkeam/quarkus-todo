@@ -3,10 +3,7 @@ package io.keam;
 import io.keam.models.Todo;
 import io.keam.models.User;
 import io.quarkus.panache.mock.PanacheMock;
-import io.quarkus.test.TestTransaction;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.common.http.TestHTTPEndpoint;
-import io.quarkus.test.h2.H2DatabaseTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
 import io.quarkus.test.security.TestSecurity;
@@ -14,10 +11,11 @@ import io.quarkus.test.security.jwt.Claim;
 import io.quarkus.test.security.jwt.JwtSecurity;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
+import io.smallrye.mutiny.Uni;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
-import org.hibernate.Session;
-import org.hibernate.query.Query;
+import org.hibernate.reactive.mutiny.Mutiny;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -30,7 +28,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.*;
 
 @QuarkusTest
-@QuarkusTestResource(H2DatabaseTestResource.class)
 @TestHTTPEndpoint(TodosResource.class)
 public class TodosResourceTest {
 
@@ -38,7 +35,7 @@ public class TodosResourceTest {
     private static Todo todo;
 
     @InjectMock
-    Session session;
+    Mutiny.Session session;
 
     @BeforeEach
     public void setup() {
@@ -52,58 +49,59 @@ public class TodosResourceTest {
         todo.setId(1L);
     }
 
-    private void mockTodoSave() {
-        Query mockQuery = Mockito.mock(Query.class);
-        Mockito.doNothing().when(session).persist(Mockito.any(Todo.class));
-        Mockito.when(session.createQuery(Mockito.anyString())).thenReturn(mockQuery);
-        Mockito.when(mockQuery.getSingleResult()).thenReturn(0L);
-    }
-
-    private void mockTodoDelete() {
-        Query mockQuery = Mockito.mock(Query.class);
-        Mockito.doNothing().when(session).remove(Mockito.any(Todo.class));
-        Mockito.when(session.createQuery(Mockito.anyString())).thenReturn(mockQuery);
-        Mockito.when(mockQuery.getSingleResult()).thenReturn(0l);
+    @AfterEach
+    public void cleanup() {
+        resetMocks();
     }
 
     private void mockUserGet() {
         PanacheMock.mock(User.class);
-        Mockito.when(User.findByUsername("testuser")).thenReturn(Optional.of(user));
+        Uni<Optional<User>> optional = Uni.createFrom().item(Optional.of(user));
+        Mockito.when(User.findByUsername("testuser")).thenReturn(optional);
     }
 
     private void mockTodoGet() {
         PanacheMock.mock(Todo.class);
-        Mockito.when(Todo.findById(1L)).thenReturn(todo);
+        Mockito.when(Todo.findById(1L)).thenReturn(Uni.createFrom().item(todo));
     }
 
     private void mockTodosGet() {
         PanacheMock.mock(User.class);
-        Mockito.when(User.findAllTodosForUsername("testuser", 0, 20, "desc")).thenReturn(List.of(todo));
+        Mockito.when(User.findAllTodosForUsername("testuser", 0, 20, "desc"))
+                .thenReturn(Uni.createFrom().item(List.of(todo)));
+    }
+
+    private void mockTodoDelete() {
+        PanacheMock.mock(Todo.class);
     }
 
     private void verifyTodoSave() {
-        Mockito.verify(session, Mockito.times(1)).persist(Mockito.any(Todo.class));
-        Mockito.reset(session);
+        Mockito.verify(session, Mockito.times(1)).withTransaction(Mockito.any());
     }
 
     private void verifyTodoDelete() {
-        Mockito.verify(session, Mockito.times(1)).remove(Mockito.any(Todo.class));
-        Mockito.reset(session);
+        Mockito.verify(session, Mockito.times(1)).withTransaction(Mockito.any());
+    }
+
+    private void verifyTodoUpdate() {
+        Mockito.verify(session, Mockito.times(1)).withTransaction(Mockito.any());
     }
 
     private void verifyUserGet() {
         PanacheMock.verify(User.class, Mockito.times(1)).findByUsername("testuser");
-        PanacheMock.reset();
     }
 
     private void verifyTodosGet() {
         PanacheMock.verify(User.class, Mockito.times(1)).findAllTodosForUsername("testuser", 0, 20, "desc");
-        PanacheMock.reset();
     }
 
     private void verifyTodoGet() {
         PanacheMock.verify(Todo.class, Mockito.times(1)).findById(1L);
+    }
+
+    private void resetMocks() {
         PanacheMock.reset();
+        Mockito.reset(session);
     }
 
     @Test
@@ -161,14 +159,12 @@ public class TodosResourceTest {
     }
 
     @Test
-    @TestTransaction
     @TestSecurity(user = "testuser", roles = "User")
     @JwtSecurity(claims = {
             @Claim(key = "upn", value = "testuser")
     })
     public void testCreate() {
         mockUserGet();
-        mockTodoSave();
         Todo todo = new Todo("Brush Teeth");
         RestAssured
                 .given()
@@ -177,7 +173,7 @@ public class TodosResourceTest {
                     .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON)
                     .body(todo)
                 .when()
-                    .post("")
+                    .post()
                 .then()
                     .statusCode(HttpStatus.SC_CREATED);
         verifyUserGet();
@@ -185,7 +181,6 @@ public class TodosResourceTest {
     }
 
     @Test
-    @TestTransaction
     @TestSecurity(user = "testuser", roles = "User")
     @JwtSecurity(claims = {
             @Claim(key = "upn", value = "testuser")
@@ -208,6 +203,7 @@ public class TodosResourceTest {
                             "done", is(newTodo.isDone())
                     );
         verifyTodoGet();
+        verifyTodoUpdate();
     }
 
     @Test
