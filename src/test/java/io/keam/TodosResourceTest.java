@@ -3,6 +3,7 @@ package io.keam;
 import io.keam.models.Todo;
 import io.keam.models.User;
 import io.quarkus.panache.mock.PanacheMock;
+import io.quarkus.test.TestReactiveTransaction;
 import io.quarkus.test.common.http.TestHTTPEndpoint;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
@@ -163,6 +164,7 @@ public class TodosResourceTest {
     @JwtSecurity(claims = {
             @Claim(key = "upn", value = "testuser")
     })
+    @TestReactiveTransaction
     public void testCreate() {
         mockUserGet();
         Todo todo = new Todo("Brush Teeth");
@@ -185,6 +187,7 @@ public class TodosResourceTest {
     @JwtSecurity(claims = {
             @Claim(key = "upn", value = "testuser")
     })
+    @TestReactiveTransaction
     public void testUpdate() {
         mockTodoGet();
         Todo newTodo = new Todo("Do not brush teeth");
@@ -211,6 +214,7 @@ public class TodosResourceTest {
     @JwtSecurity(claims = {
             @Claim(key = "upn", value = "testuser")
     })
+    @TestReactiveTransaction
     public void testDelete() {
         mockTodoGet();
         mockTodoDelete();

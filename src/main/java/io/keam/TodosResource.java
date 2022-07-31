@@ -48,26 +48,24 @@ public class TodosResource {
     @GET
     @Path("/{id}")
     public Uni<Todo> get(Long id) {
-        Uni<Todo> todoUni = Todo.findById(id);
-        return todoUni.chain(todo -> {
-            if (todo != null && todo.isOwnedByUsername(username)) {
-                return Uni.createFrom().item(todo);
+        return Todo.<Todo> findById(id).chain(todo -> {
+            if (!isOwnedByUser(todo)) {
+                return Uni.createFrom().nullItem();
             }
-            return Uni.createFrom().nullItem();
+            return Uni.createFrom().item(todo);
         });
     }
 
     @POST
+    @ReactiveTransactional
     public Uni<Response> create(Todo todo) {
         if (todo == null) {
             throw new BadRequestException();
         }
-        Uni<Optional<User>> userUni = User.findByUsername(username);
-        return userUni.chain(optionalUser -> {
+        return User.findByUsername(username).chain(optionalUser -> {
             User user = optionalUser.orElseThrow(BadRequestException::new);
             user.addTodo(todo);
-            return Panache.withTransaction(todo::persist)
-                    .replaceWith(Uni.createFrom().item(Response.ok(todo).status(Response.Status.CREATED).build()));
+            return todo.persist().<Response>replaceWith(Response.ok().status(NO_CONTENT)::build);
         });
     }
 
@@ -78,76 +76,29 @@ public class TodosResource {
         if (todo == null) {
             throw new WebApplicationException("Invalid request.", BAD_REQUEST);
         }
-
-//        return Panache.withTransaction(() -> Todo.<Todo> findById(id, LockModeType.PESSIMISTIC_WRITE)
-//                // If entity exists then update it
-//                .onItem().ifNotNull().invoke(entity -> {
-//                    entity.setTitle(todo.getTitle());
-//                    System.out.println("here");
-//                })
-//                .onItem().ifNotNull().transform(entity -> Response.ok(entity).build())
-//                // If entity not found return the appropriate response
-//                .onItem().ifNull().continueWith(() -> Response.ok().status(NOT_FOUND).build() )
-//        );
-
-//       return Panache
-//                .withTransaction(() -> Todo.<Todo> findById(id)
-//                    .onItem().ifNotNull().invoke(entity -> entity.setTitle(todo.getTitle()))
-//                )
-//                .onItem().ifNotNull().transform(entity -> Response.ok(entity).build())
-//                .onItem().ifNull().continueWith(Response.ok().status(NOT_FOUND)::build);
-
-
-//        return Uni.createFrom().item(() -> {
-            return Todo.<Todo> findById(id).onItem().transform(entity -> {
-                if (entity == null || !entity.isOwnedByUsername(username)) {
-                    return Response.ok().status(NOT_FOUND).build();
-                }
-                entity.setTitle(todo.getTitle());
-                entity.setDone(todo.isDone());
-                return Response.ok(entity).build();
-            });
-//        });
-
-
-//        return Panache.withTransaction(() -> Todo.<Todo> findById(id)
-//                .chain(entity -> {
-//                    if (entity == null) {
-//                        return Uni.createFrom().item(null);
-//                    }
-//                    entity.setTitle(todo.getTitle());
-//                    entity.setDone(todo.isDone());
-//                    return Uni.createFrom().item(entity);
-//                })
-//                .map(entity -> {
-//                    if (entity == null) {
-//                        return Response.ok().status(NOT_FOUND).build();
-//                    }
-//                    return Response.ok(entity).build();
-//                })
-//        );
+        return Todo.<Todo> findById(id).map(entity -> {
+            if (!isOwnedByUser(entity)) {
+                return Response.ok().status(NOT_FOUND).build();
+            }
+            entity.setTitle(todo.getTitle());
+            entity.setDone(todo.isDone());
+            return Response.ok(entity).build();
+        });
     }
 
     @DELETE
     @Path("/{id}")
     @ReactiveTransactional
     public Uni<Response> delete(Long id) {
-        /*
-        return Todo.<Todo> findById(id).onItem().transform(entity -> {
-            if (entity == null || !entity.isOwnedByUsername(username)) {
-                return Response.ok().status(NOT_FOUND).build();
+        return Todo.<Todo>findById(id).<Response>chain(entity -> {
+            if (!isOwnedByUser(entity)) {
+                return Uni.createFrom().item(Response.ok().status(NOT_FOUND).build());
             }
-            return entity.delete().replaceWith(Response.ok().status(NO_CONTENT).build());
+            return entity.delete().<Response>replaceWith(Response.ok().status(NO_CONTENT)::build);
         });
-        */
-        return Panache.withTransaction(() -> Todo.<Todo> findById(id)
-                .chain(entity -> {
-                    if (entity == null || !entity.isOwnedByUsername(username)) {
-                        return Uni.createFrom().item(Response.ok().status(NOT_FOUND).build());
-                    }
-                    Response response = Response.ok().status(NO_CONTENT).build();
-                    return entity.delete().chain(() -> Uni.createFrom().item(response));
-                })
-        );
+    }
+
+    private boolean isOwnedByUser(Todo todo) {
+        return todo != null && todo.isOwnedByUsername(username);
     }
 }
